@@ -2181,8 +2181,21 @@ otherwise it should return:
         (org-jira-update-worklogs-from-org-clocks))
 
       ;; Send the update to jira
-      (if jiralib-cloud-enabled
-          (let ((update-fields
+      (let ((update-fields
+             (if jiralib-cloud-enabled
+                 (list (cons
+                    'components
+                    (or (org-jira-build-components-list
+                         project-components
+                         org-issue-components) []))
+                   (cons 'priority (org-jira-get-id-name-alist org-issue-priority
+                                                               (jiralib-get-priorities)))
+                   (cons 'description org-issue-description)
+                   (cons 'assignee (list (cons 'id (jiralib-get-user-account-id project org-issue-assignee))))
+                   (cons 'reporter (list (cons 'id (jiralib-get-user-account-id project org-issue-reporter))))
+                   (cons 'summary (org-jira-strip-priority-tags (org-jira-get-issue-val-from-org 'summary)))
+                   (cons 'issuetype `((id . ,org-issue-type-id)
+                                      (name . ,org-issue-type))))
                  (list (cons
                         'components
                         (or (org-jira-build-components-list
@@ -2191,21 +2204,7 @@ otherwise it should return:
                        (cons 'priority (org-jira-get-id-name-alist org-issue-priority
                                                                    (jiralib-get-priorities)))
                        (cons 'description org-issue-description)
-                       (cons 'assignee (list (cons 'id (jiralib-get-user-account-id project org-issue-assignee))))
-                       (cons 'reporter (list (cons 'id (jiralib-get-user-account-id project org-issue-reporter))))
-                       (cons 'summary (org-jira-strip-priority-tags (org-jira-get-issue-val-from-org 'summary)))
-                       (cons 'issuetype `((id . ,org-issue-type-id)
-                                          (name . ,org-issue-type)))))))
-          (let ((update-fields
-                 (list (cons
-                        'components
-                        (or (org-jira-build-components-list
-                             project-components
-                             org-issue-components) []))
-                       (cons 'priority (org-jira-get-id-name-alist org-issue-priority
-                                                                   (jiralib-get-priorities)))
-                       (cons 'description org-issue-description)
-                       (cons 'assignee (list (cons 'assignee (jiralib-get-user-account-id project org-issue-assignee))))
+                       (cons 'assignee (list (cons 'name (jiralib-get-user-account-id project org-issue-assignee))))
                        (cons 'reporter (list (cons 'id (jiralib-get-user-account-id project org-issue-reporter))))
                        (cons 'summary (org-jira-strip-priority-tags (org-jira-get-issue-val-from-org 'summary)))
                        (cons 'issuetype `((id . ,org-issue-type-id)
