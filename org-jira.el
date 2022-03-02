@@ -2205,7 +2205,7 @@ otherwise it should return:
                                                                    (jiralib-get-priorities)))
                        (cons 'description org-issue-description)
                        (cons 'assignee (list (cons 'name (jiralib-get-user-account-id project org-issue-assignee))))
-                       (cons 'reporter (list (cons 'id (jiralib-get-user-account-id project org-issue-reporter))))
+                       (cons 'reporter (list (cons 'name (jiralib-get-user-account-id project org-issue-reporter))))
                        (cons 'summary (org-jira-strip-priority-tags (org-jira-get-issue-val-from-org 'summary)))
                        (cons 'issuetype `((id . ,org-issue-type-id)
                                           (name . ,org-issue-type)))))))
