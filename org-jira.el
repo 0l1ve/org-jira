@@ -622,11 +622,17 @@ it isn't already on."
   (append
    '(("Unassigned" . nil))
    org-jira-users
-   (mapcar (lambda (user)
-             (cons (org-jira-decode (cdr (assoc 'displayName user)))
-                   (org-jira-decode (cdr (assoc 'accountId user)))))
-           (jiralib-get-users project-key))))
-
+   (if jiralib-cloud-enabled 
+       ((mapcar (lambda (user)
+                  (cons (org-jira-decode (cdr (assoc 'displayName user)))
+                        (org-jira-decode (cdr (assoc 'accountId user)))))
+                (jiralib-get-users project-key)))
+     (mapcar (lambda (user)
+               (cons (org-jira-decode (cdr (assoc 'displayName user)))
+                     (org-jira-decode (cdr (assoc 'name user)))))
+             (jiralib-get-users project-key)))
+   ))
+   
 (defun org-jira-get-reporter-candidates (project-key)
   "Get the list of assignable users for PROJECT-KEY, adding user set jira-users first."
   (append
@@ -1767,7 +1773,8 @@ that should be bound to an issue."
           (equal type "")
           (equal summary ""))
       (error "Must provide all information!"))
-  (let* ((project-components (jiralib-get-components project))
+  (if jiralib-cloud-enabled
+      (let* ((project-components (jiralib-get-components project))
          (jira-users (org-jira-get-assignable-users project))
          (user (completing-read "Assignee: " (mapcar 'car jira-users)))
          (priority (car (rassoc (org-jira-read-priority) (jiralib-get-priorities))))
@@ -1786,7 +1793,27 @@ that should be bound to an issue."
              (priority (id . ,priority))
              ;; accountId should be nil if Unassigned, not the key slot.
              (assignee (accountId . ,(or (cdr (assoc user jira-users)) nil)))))))
-    ticket-struct))
+        ticket-struct)
+    (let* ((project-components (jiralib-get-components project))
+           (jira-users (org-jira-get-assignable-users project))
+           (user (completing-read "Assignee: " (mapcar 'car jira-users)))
+           (priority (car (rassoc (org-jira-read-priority) (jiralib-get-priorities))))
+           (ticket-struct
+            `((fields
+               (project (key . ,project))
+               (parent (key . ,parent-id))
+               (issuetype (id . ,(car (rassoc type (if (and (boundp 'parent-id) parent-id)
+                                                       (jiralib-get-subtask-types)
+                                                     (jiralib-get-issue-types-by-project project))))))
+               (summary . ,(format "%s%s" summary
+                                   (if (and (boundp 'parent-id) parent-id)
+                                       (format " (subtask of [jira:%s])" parent-id)
+                                     "")))
+               (description . ,description)
+               (priority (id . ,priority))
+               ;; accountId should be nil if Unassigned, not the key slot.
+               (assignee (name . ,(or (cdr (assoc user jira-users)) nil)))))))
+      ticket-struct)))
 
 ;;;###autoload
 (defun org-jira-create-issue (project type summary description)
@@ -2154,21 +2181,35 @@ otherwise it should return:
         (org-jira-update-worklogs-from-org-clocks))
 
       ;; Send the update to jira
-      (let ((update-fields
-             (list (cons
-                    'components
-                    (or (org-jira-build-components-list
-                         project-components
-                         org-issue-components) []))
-                   (cons 'priority (org-jira-get-id-name-alist org-issue-priority
-                                                       (jiralib-get-priorities)))
-                   (cons 'description org-issue-description)
-                   (cons 'assignee (list (cons 'id (jiralib-get-user-account-id project org-issue-assignee))))
-                   (cons 'reporter (list (cons 'id (jiralib-get-user-account-id project org-issue-reporter))))
-                   (cons 'summary (org-jira-strip-priority-tags (org-jira-get-issue-val-from-org 'summary)))
-                   (cons 'issuetype `((id . ,org-issue-type-id)
-      (name . ,org-issue-type))))))
-
+      (if jiralib-cloud-enabled
+          (let ((update-fields
+                 (list (cons
+                        'components
+                        (or (org-jira-build-components-list
+                             project-components
+                             org-issue-components) []))
+                       (cons 'priority (org-jira-get-id-name-alist org-issue-priority
+                                                                   (jiralib-get-priorities)))
+                       (cons 'description org-issue-description)
+                       (cons 'assignee (list (cons 'id (jiralib-get-user-account-id project org-issue-assignee))))
+                       (cons 'reporter (list (cons 'id (jiralib-get-user-account-id project org-issue-reporter))))
+                       (cons 'summary (org-jira-strip-priority-tags (org-jira-get-issue-val-from-org 'summary)))
+                       (cons 'issuetype `((id . ,org-issue-type-id)
+                                          (name . ,org-issue-type)))))))
+          (let ((update-fields
+                 (list (cons
+                        'components
+                        (or (org-jira-build-components-list
+                             project-components
+                             org-issue-components) []))
+                       (cons 'priority (org-jira-get-id-name-alist org-issue-priority
+                                                                   (jiralib-get-priorities)))
+                       (cons 'description org-issue-description)
+                       (cons 'assignee (list (cons 'assignee (jiralib-get-user-account-id project org-issue-assignee))))
+                       (cons 'reporter (list (cons 'id (jiralib-get-user-account-id project org-issue-reporter))))
+                       (cons 'summary (org-jira-strip-priority-tags (org-jira-get-issue-val-from-org 'summary)))
+                       (cons 'issuetype `((id . ,org-issue-type-id)
+                                          (name . ,org-issue-type)))))))
 
         ;; If we enable duedate sync and we have a deadline present
         (when (and org-jira-deadline-duedate-sync-p
